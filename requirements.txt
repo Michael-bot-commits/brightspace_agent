@@ -1,0 +1,85 @@
+# ============================================
+# WEB SCRAPING
+# ============================================
+# Playwright: Automatisation navigateur (login)
+playwright==1.48.0
+
+# BeautifulSoup: Parsing HTML
+beautifulsoup4==4.12.3
+
+# lxml: Parser HTML rapide pour BeautifulSoup
+lxml==5.3.0
+
+# ============================================
+# API CLIENTS
+# ============================================
+# Anthropic: API Claude pour agent IA
+anthropic==0.39.0
+
+# Twilio: API WhatsApp
+twilio==9.3.7
+
+# ============================================
+# HTTP REQUESTS
+# ============================================
+# Requests: Faire des requêtes HTTP
+requests==2.32.3
+
+# ============================================
+# CONFIGURATION
+# ============================================
+# python-dotenv: Charger variables depuis .env
+python-dotenv==1.0.1
+
+# ============================================
+# SÉCURITÉ / CHIFFREMENT
+# ============================================
+# cryptography: Chiffrer cookies et secrets
+cryptography==43.0.3
+
+# ============================================
+# PARSING DATES
+# ============================================
+# python-dateutil: Parser dates complexes
+python-dateutil==2.9.0
+
+# dateparser: Parser dates en langage naturel
+dateparser==1.2.0
+
+# ============================================
+# SCHEDULING / TÂCHES PÉRIODIQUES
+# ============================================
+# schedule: Planifier tâches automatiques
+schedule==1.2.2
+
+# APScheduler: Alternative plus puissante (optionnel)
+# apscheduler==3.10.4
+
+# ============================================
+# LOGS
+# ============================================
+# colorlog: Logs avec couleurs dans terminal
+colorlog==6.8.2
+
+# ============================================
+# WEB SERVER (pour webhook WhatsApp)
+# ============================================
+# Flask: Serveur web léger
+flask==3.0.3
+
+# ============================================
+# BASE DE DONNÉES
+# ============================================
+# Note: sqlite3 est inclus avec Python (pas besoin d'installer)
+
+# ============================================
+# DÉVELOPPEMENT / TESTS (optionnel)
+# ============================================
+# pytest: Tests unitaires
+# pytest==8.3.4
+
+# black: Formatage code automatique
+# black==24.10.0
+
+# pylint: Analyse qualité code
+# pylint==3.3.2
