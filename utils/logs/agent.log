@@ -1,0 +1,5 @@
+2025-10-20 20:44:59 - brightspace-agent - DEBUG - test_logger:103 - 🔍 Ceci est un message DEBUG (détails techniques)
+2025-10-20 20:44:59 - brightspace-agent - INFO - test_logger:104 - ℹ️ Ceci est un message INFO (information normale)
+2025-10-20 20:44:59 - brightspace-agent - WARNING - test_logger:105 - ⚠️ Ceci est un message WARNING (attention)
+2025-10-20 20:44:59 - brightspace-agent - ERROR - test_logger:106 - ❌ Ceci est un message ERROR (erreur)
+2025-10-20 20:44:59 - brightspace-agent - CRITICAL - test_logger:107 - 🚨 Ceci est un message CRITICAL (fatal)
