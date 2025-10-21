@@ -446,7 +446,7 @@ def test_auth():
         print("❌ Impossible d'obtenir session valide")
     
     print("\n" + "=" * 60)
-    print("✅ Tests terminés!")
+    print("✅ Tests terminéss!")
     print("=" * 60)
 
 
