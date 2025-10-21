@@ -102,7 +102,7 @@ class AuthManager:
                     # Remplir password
                     password_selectors = [
                         'input[name="password"]',
-                        'input[name="Password"]',
+                        'input[name="txtPassword"]',
                         'input[type="password"]',
                         '#password',
                         '#Password'
