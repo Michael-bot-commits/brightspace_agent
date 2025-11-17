@@ -1,0 +1,20 @@
+# Ne pas copier dans l'image Docker
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.env
+*.enc
+data/
+logs/
+.git/
+.gitignore
+README.md
+.DS_Store
