@@ -1,239 +1,128 @@
 """
-Gestion de la base de données SQLite
-Stocke les travaux Brightspace et historique des synchronisations
+Gestionnaire de base de données SQLite pour les travaux Brightspace
+Stocke les travaux, leur statut, et l'historique des synchronisations
 """
 import sqlite3
 from datetime import datetime
 from typing import List, Dict, Optional
-import os
 
 from utils.logger import logger
-from config import config
 
 
 class Database:
-    """
-    Gestionnaire de la base de données SQLite
-    """
+    """Gère la base de données SQLite pour stocker les travaux"""
     
-    def __init__(self, db_path=None):
+    def __init__(self, db_file: str = 'data/assignments.db'):
         """
         Initialise la connexion à la base de données
         
         Args:
-            db_path: Chemin du fichier DB (défaut: depuis config)
+            db_file: Chemin vers le fichier de base de données
         """
-        self.db_path = db_path or config.DATABASE_FILE
-        self._ensure_data_dir()
-        self.init_database()
-        logger.info(f"✅ Database initialisée: {self.db_path}")
+        self.db_file = db_file
+        self.conn = sqlite3.connect(db_file)
+        self.cursor = self.conn.cursor()
+        self._create_tables()
+        logger.debug(f"Database initialisée: {db_file}")
     
-    def _ensure_data_dir(self):
-        """Crée le dossier data/ si n'existe pas"""
-        data_dir = os.path.dirname(self.db_path)
-        if data_dir:
-            os.makedirs(data_dir, exist_ok=True)
-    
-    def get_connection(self):
-        """
-        Retourne une connexion à la base de données
-        
-        Returns:
-            sqlite3.Connection
-        """
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row  # Permet accès par nom de colonne
-        return conn
-    
-    def init_database(self):
+    def _create_tables(self):
         """Crée les tables si elles n'existent pas"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
         
-        # ============================================
-        # TABLE: assignments
-        # ============================================
-        cursor.execute('''
+        # Table des travaux
+        self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS assignments (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 course TEXT NOT NULL,
-                due_date DATETIME NOT NULL,
-                is_completed BOOLEAN DEFAULT 0,
-                grade REAL,
+                due_date TEXT,
                 link TEXT,
+                is_completed INTEGER DEFAULT 0,
+                grade INTEGER,
                 description TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                last_notified DATETIME,
-                notification_count INTEGER DEFAULT 0
+                status TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # ============================================
-        # TABLE: sync_history
-        # ============================================
-        cursor.execute('''
+        # Table de l'historique des synchronisations
+        self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS sync_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sync_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-                status TEXT NOT NULL,
-                assignments_found INTEGER DEFAULT 0,
-                new_assignments INTEGER DEFAULT 0,
-                updated_assignments INTEGER DEFAULT 0,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                status TEXT,
+                assignments_found INTEGER,
+                new_assignments INTEGER,
+                updated_assignments INTEGER,
                 error_message TEXT
             )
         ''')
         
-        # ============================================
-        # INDEX pour performance
-        # ============================================
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_due_date 
-            ON assignments(due_date)
-        ''')
-        
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_is_completed 
-            ON assignments(is_completed)
-        ''')
-        
-        cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_course
-            ON assignments(course)
-        ''')
-        
-        conn.commit()
-        conn.close()
-        
-        logger.debug("Tables de base de données créées/vérifiées")
+        self.conn.commit()
     
     def save_assignment(self, assignment: Dict) -> bool:
         """
-        Insère ou met à jour un travail
+        Sauvegarde ou met à jour un travail
         
         Args:
-            assignment: Dict avec clés: id, title, course, due_date, etc.
+            assignment: Dictionnaire contenant les infos du travail
         
         Returns:
             bool: True si nouveau, False si mis à jour
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Vérifier si existe déjà
-        cursor.execute('SELECT id FROM assignments WHERE id = ?', (assignment['id'],))
-        exists = cursor.fetchone() is not None
-        
-        if exists:
-            # UPDATE
-            cursor.execute('''
-                UPDATE assignments
-                SET title = ?, course = ?, due_date = ?, is_completed = ?,
-                    grade = ?, link = ?, description = ?, updated_at = ?
-                WHERE id = ?
-            ''', (
-                assignment['title'],
-                assignment['course'],
-                assignment['due_date'],
-                assignment.get('is_completed', False),
-                assignment.get('grade'),
-                assignment.get('link'),
-                assignment.get('description'),
-                datetime.now(),
-                assignment['id']
-            ))
-            logger.debug(f"Travail mis à jour: {assignment['title']}")
-            conn.commit()
-            conn.close()
+        try:
+            # Vérifier si existe déjà
+            existing = self.get_assignment(assignment['id'])
+            
+            if existing:
+                # Mise à jour
+                self.cursor.execute('''
+                    UPDATE assignments 
+                    SET title=?, course=?, due_date=?, link=?, 
+                        is_completed=?, grade=?, description=?, status=?,
+                        updated_at=?
+                    WHERE id=?
+                ''', (
+                    assignment['title'],
+                    assignment['course'],
+                    assignment['due_date'],
+                    assignment['link'],
+                    int(assignment['is_completed']),
+                    assignment['grade'],
+                    assignment['description'],
+                    assignment['status'],
+                    datetime.now().isoformat(),
+                    assignment['id']
+                ))
+                self.conn.commit()
+                return False
+            else:
+                # Insertion
+                self.cursor.execute('''
+                    INSERT INTO assignments 
+                    (id, title, course, due_date, link, is_completed, grade, description, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    assignment['id'],
+                    assignment['title'],
+                    assignment['course'],
+                    assignment['due_date'],
+                    assignment['link'],
+                    int(assignment['is_completed']),
+                    assignment['grade'],
+                    assignment['description'],
+                    assignment['status']
+                ))
+                self.conn.commit()
+                return True
+                
+        except Exception as e:
+            logger.error(f"Erreur sauvegarde travail: {e}")
             return False
-        else:
-            # INSERT
-            cursor.execute('''
-                INSERT INTO assignments 
-                (id, title, course, due_date, is_completed, grade, link, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                assignment['id'],
-                assignment['title'],
-                assignment['course'],
-                assignment['due_date'],
-                assignment.get('is_completed', False),
-                assignment.get('grade'),
-                assignment.get('link'),
-                assignment.get('description')
-            ))
-            logger.info(f"✅ Nouveau travail ajouté: {assignment['title']}")
-            conn.commit()
-            conn.close()
-            return True
     
-    def get_all_assignments(self) -> List[Dict]:
+    def get_assignment(self, assignment_id: str) -> Optional[Dict]:
         """
-        Retourne tous les travaux
-        
-        Returns:
-            List de dicts
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM assignments ORDER BY due_date ASC')
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-    
-    def get_pending_assignments(self) -> List[Dict]:
-        """
-        Retourne tous les travaux non complétés
-        
-        Returns:
-            List de dicts
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM assignments
-            WHERE is_completed = 0
-            ORDER BY due_date ASC
-        ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-    
-    def get_assignments_due_soon(self, days=3) -> List[Dict]:
-        """
-        Retourne travaux avec échéance dans X jours
-        
-        Args:
-            days: Nombre de jours
-        
-        Returns:
-            List de dicts
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM assignments
-            WHERE is_completed = 0
-            AND due_date BETWEEN datetime('now') 
-                AND datetime('now', '+' || ? || ' days')
-            ORDER BY due_date ASC
-        ''', (days,))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
-    
-    def get_assignment_by_id(self, assignment_id: str) -> Optional[Dict]:
-        """
-        Retourne un travail par son ID
+        Récupère un travail par son ID
         
         Args:
             assignment_id: ID du travail
@@ -241,281 +130,185 @@ class Database:
         Returns:
             Dict ou None
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('SELECT * FROM assignments WHERE id = ?', (assignment_id,))
-        row = cursor.fetchone()
-        conn.close()
-        
-        return dict(row) if row else None
+        try:
+            self.cursor.execute('''
+                SELECT * FROM assignments WHERE id = ?
+            ''', (assignment_id,))
+            
+            row = self.cursor.fetchone()
+            
+            if row:
+                return {
+                    'id': row[0],
+                    'title': row[1],
+                    'course': row[2],
+                    'due_date': row[3],
+                    'link': row[4],
+                    'is_completed': bool(row[5]),
+                    'grade': row[6],
+                    'description': row[7],
+                    'status': row[8]
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération travail {assignment_id}: {e}")
+            return None
     
-    def mark_as_notified(self, assignment_id: str):
+    def get_pending_assignments(self) -> List[Dict]:
         """
-        Marque un travail comme notifié
+        Récupère tous les travaux non complétés
+        
+        Returns:
+            List[Dict]: Liste des travaux à faire
+        """
+        try:
+            self.cursor.execute('''
+                SELECT * FROM assignments 
+                WHERE is_completed = 0
+                ORDER BY due_date ASC
+            ''')
+            
+            rows = self.cursor.fetchall()
+            assignments = []
+            
+            for row in rows:
+                assignments.append({
+                    'id': row[0],
+                    'title': row[1],
+                    'course': row[2],
+                    'due_date': row[3],
+                    'link': row[4],
+                    'is_completed': bool(row[5]),
+                    'grade': row[6],
+                    'description': row[7],
+                    'status': row[8]
+                })
+            
+            return assignments
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération travaux pending: {e}")
+            return []
+    
+    def get_all_assignments(self) -> List[Dict]:
+        """
+        Récupère TOUS les travaux (completed et pending)
+        
+        Returns:
+            List[Dict]: Liste de tous les travaux
+        """
+        try:
+            self.cursor.execute('''
+                SELECT * FROM assignments
+                ORDER BY due_date ASC
+            ''')
+            
+            rows = self.cursor.fetchall()
+            assignments = []
+            
+            for row in rows:
+                assignments.append({
+                    'id': row[0],
+                    'title': row[1],
+                    'course': row[2],
+                    'due_date': row[3],
+                    'link': row[4],
+                    'is_completed': bool(row[5]),
+                    'grade': row[6],
+                    'description': row[7],
+                    'status': row[8]
+                })
+            
+            return assignments
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération tous travaux: {e}")
+            return []
+    
+    def delete_assignment(self, assignment_id: str) -> bool:
+        """
+        Supprime un travail de la base de données
         
         Args:
-            assignment_id: ID du travail
+            assignment_id: ID du travail à supprimer
+        
+        Returns:
+            bool: True si supprimé, False sinon
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            UPDATE assignments
-            SET last_notified = ?, 
-                notification_count = notification_count + 1
-            WHERE id = ?
-        ''', (datetime.now(), assignment_id))
-        
-        conn.commit()
-        conn.close()
-        logger.debug(f"Travail marqué comme notifié: {assignment_id}")
+        try:
+            self.cursor.execute('''
+                DELETE FROM assignments WHERE id = ?
+            ''', (assignment_id,))
+            self.conn.commit()
+            
+            return self.cursor.rowcount > 0
+            
+        except Exception as e:
+            logger.error(f"Erreur suppression travail {assignment_id}: {e}")
+            return False
     
-    def delete_assignment(self, assignment_id: str):
-        """
-        Supprime un travail
-        
-        Args:
-            assignment_id: ID du travail
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM assignments WHERE id = ?', (assignment_id,))
-        conn.commit()
-        conn.close()
-        logger.info(f"Travail supprimé: {assignment_id}")
-    
-    def log_sync(self, status: str, assignments_found: int = 0, 
-                 new: int = 0, updated: int = 0, error: str = None):
+    def log_sync(self, status: str, assignments_found: int, new: int, updated: int, error: str = None):
         """
         Enregistre une synchronisation dans l'historique
         
         Args:
             status: 'success' ou 'error'
-            assignments_found: Nombre total trouvés
-            new: Nombre de nouveaux
-            updated: Nombre mis à jour
-            error: Message d'erreur si échec
+            assignments_found: Nombre de travaux trouvés
+            new: Nombre de nouveaux travaux
+            updated: Nombre de travaux mis à jour
+            error: Message d'erreur (optionnel)
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO sync_history 
-            (status, assignments_found, new_assignments, updated_assignments, error_message)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (status, assignments_found, new, updated, error))
-        
-        conn.commit()
-        conn.close()
-        
-        if status == 'success':
-            logger.info(f"✅ Sync réussie: {assignments_found} travaux ({new} nouveaux, {updated} MàJ)")
-        else:
-            logger.error(f"❌ Sync échouée: {error}")
+        try:
+            self.cursor.execute('''
+                INSERT INTO sync_history 
+                (status, assignments_found, new_assignments, updated_assignments, error_message)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (status, assignments_found, new, updated, error))
+            
+            self.conn.commit()
+            
+        except Exception as e:
+            logger.error(f"Erreur log sync: {e}")
     
-    def get_sync_history(self, limit=10) -> List[Dict]:
+    def get_sync_history(self, limit: int = 10) -> List[Dict]:
         """
-        Retourne l'historique des synchronisations
+        Récupère l'historique des synchronisations
         
         Args:
-            limit: Nombre max de résultats
+            limit: Nombre maximum de résultats
         
         Returns:
-            List de dicts
+            List[Dict]: Historique des syncs
         """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM sync_history
-            ORDER BY sync_time DESC
-            LIMIT ?
-        ''', (limit,))
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return [dict(row) for row in rows]
+        try:
+            self.cursor.execute('''
+                SELECT * FROM sync_history 
+                ORDER BY timestamp DESC 
+                LIMIT ?
+            ''', (limit,))
+            
+            rows = self.cursor.fetchall()
+            history = []
+            
+            for row in rows:
+                history.append({
+                    'id': row[0],
+                    'timestamp': row[1],
+                    'status': row[2],
+                    'assignments_found': row[3],
+                    'new_assignments': row[4],
+                    'updated_assignments': row[5],
+                    'error_message': row[6]
+                })
+            
+            return history
+            
+        except Exception as e:
+            logger.error(f"Erreur récupération historique: {e}")
+            return []
     
-    def get_statistics(self) -> Dict:
-        """
-        Retourne des statistiques sur les travaux
-        
-        Returns:
-            Dict avec stats
-        """
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Total travaux
-        cursor.execute('SELECT COUNT(*) as total FROM assignments')
-        total = cursor.fetchone()['total']
-        
-        # Travaux complétés
-        cursor.execute('SELECT COUNT(*) as completed FROM assignments WHERE is_completed = 1')
-        completed = cursor.fetchone()['completed']
-        
-        # Travaux en attente
-        pending = total - completed
-        
-        # Travaux urgents (< 48h)
-        cursor.execute('''
-            SELECT COUNT(*) as urgent FROM assignments
-            WHERE is_completed = 0
-            AND due_date BETWEEN datetime('now') 
-                AND datetime('now', '+2 days')
-        ''')
-        urgent = cursor.fetchone()['urgent']
-        
-        # Travaux en retard
-        cursor.execute('''
-            SELECT COUNT(*) as overdue FROM assignments
-            WHERE is_completed = 0
-            AND due_date < datetime('now')
-        ''')
-        overdue = cursor.fetchone()['overdue']
-        
-        conn.close()
-        
-        return {
-            'total': total,
-            'completed': completed,
-            'pending': pending,
-            'urgent': urgent,
-            'overdue': overdue,
-            'completion_rate': (completed / total * 100) if total > 0 else 0
-        }
-
-
-# ============================================
-# INSTANCE GLOBALE
-# ============================================
-db = Database()
-
-
-# ============================================
-# FONCTION DE TEST
-# ============================================
-def test_database():
-    """Teste toutes les opérations de la base de données"""
-    print("🗄️ Test de la base de données...\n")
-    
-    # Test 1: Créer des travaux de test
-    print("=" * 60)
-    print("TEST 1: Insertion de travaux")
-    print("=" * 60)
-    
-    travaux_test = [
-        {
-            'id': 'test-001',
-            'title': 'Devoir de Mathématiques',
-            'course': 'Calcul 2 (MAT201)',
-            'due_date': '2025-10-25 23:59:00',
-            'is_completed': False,
-            'link': 'https://brightspace.collegeboreal.ca/assignment/1'
-        },
-        {
-            'id': 'test-002',
-            'title': 'TP Python - Classes',
-            'course': 'Programmation (INF105)',
-            'due_date': '2025-10-28 23:59:00',
-            'is_completed': False,
-            'link': 'https://brightspace.collegeboreal.ca/assignment/2'
-        },
-        {
-            'id': 'test-003',
-            'title': 'Essai Philosophie',
-            'course': 'Philo 101',
-            'due_date': '2025-11-05 23:59:00',
-            'is_completed': True,
-            'grade': 85.5
-        }
-    ]
-    
-    for travail in travaux_test:
-        is_new = db.save_assignment(travail)
-        print(f"  {'✅ Nouveau' if is_new else '📝 Mis à jour'}: {travail['title']}")
-    
-    # Test 2: Lire tous les travaux
-    print("\n" + "=" * 60)
-    print("TEST 2: Lecture de tous les travaux")
-    print("=" * 60)
-    
-    all_assignments = db.get_all_assignments()
-    print(f"  Total: {len(all_assignments)} travaux\n")
-    
-    for assignment in all_assignments:
-        status = "✅ Complété" if assignment['is_completed'] else "❌ En attente"
-        print(f"  {status} - {assignment['title']}")
-        print(f"           Cours: {assignment['course']}")
-        print(f"           Échéance: {assignment['due_date']}")
-        if assignment['grade']:
-            print(f"           Note: {assignment['grade']}/100")
-        print()
-    
-    # Test 3: Travaux en attente
-    print("=" * 60)
-    print("TEST 3: Travaux en attente")
-    print("=" * 60)
-    
-    pending = db.get_pending_assignments()
-    print(f"  {len(pending)} travaux en attente:\n")
-    
-    for assignment in pending:
-        print(f"  📋 {assignment['title']}")
-        print(f"     {assignment['course']} - {assignment['due_date']}\n")
-    
-    # Test 4: Travaux urgents
-    print("=" * 60)
-    print("TEST 4: Travaux urgents (< 7 jours)")
-    print("=" * 60)
-    
-    due_soon = db.get_assignments_due_soon(days=7)
-    print(f"  {len(due_soon)} travaux urgents\n")
-    
-    # Test 5: Statistiques
-    print("=" * 60)
-    print("TEST 5: Statistiques")
-    print("=" * 60)
-    
-    stats = db.get_statistics()
-    print(f"\n  📊 Statistiques globales:")
-    print(f"     Total de travaux: {stats['total']}")
-    print(f"     Complétés: {stats['completed']}")
-    print(f"     En attente: {stats['pending']}")
-    print(f"     Urgents (< 48h): {stats['urgent']}")
-    print(f"     En retard: {stats['overdue']}")
-    print(f"     Taux de complétion: {stats['completion_rate']:.1f}%")
-    
-    # Test 6: Historique de sync
-    print("\n" + "=" * 60)
-    print("TEST 6: Enregistrement d'une synchronisation")
-    print("=" * 60)
-    
-    db.log_sync(
-        status='success',
-        assignments_found=3,
-        new=3,
-        updated=0
-    )
-    print("  ✅ Synchronisation enregistrée")
-    
-    history = db.get_sync_history(limit=5)
-    print(f"\n  📜 Historique (dernières {len(history)} syncs):\n")
-    
-    for sync in history:
-        print(f"  {sync['sync_time']} - {sync['status'].upper()}")
-        print(f"     Trouvés: {sync['assignments_found']} | Nouveaux: {sync['new_assignments']} | MàJ: {sync['updated_assignments']}")
-        if sync['error_message']:
-            print(f"     Erreur: {sync['error_message']}")
-        print()
-    
-    print("=" * 60)
-    print("✅ Tous les tests de la base de données réussis!")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    test_database()
+    def close(self):
+        """Ferme la connexion à la base de données"""
+        self.conn.close()

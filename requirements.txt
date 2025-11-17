@@ -83,3 +83,4 @@ flask==3.0.3
 
 # pylint: Analyse qualité code
 # pylint==3.3.2
+#environs==10.0.0
