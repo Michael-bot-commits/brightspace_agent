@@ -68,6 +68,12 @@ colorlog==6.8.2
 flask==3.0.3
 
 # ============================================
+# EMAIL
+# ============================================
+# yagmail: Envoi d'emails Gmail simplifié
+yagmail==0.15.293
+
+# ============================================
 # BASE DE DONNÉES
 # ============================================
 # Note: sqlite3 est inclus avec Python (pas besoin d'installer)
