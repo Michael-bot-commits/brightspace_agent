@@ -26,8 +26,8 @@ wait_until_next_run() {
     current_minutes=$((10#$current_hour * 60 + 10#$current_minute))
 
     # Heures d'exécution : 8h00 (480 min) et 22h00 (1320 min)
-    morning_time=100   # 8h00
-    evening_time=110  # 22h00
+    morning_time=125   # 8h00
+    evening_time=135  # 22h00
 
     # Calculer le temps d'attente
     if [ $current_minutes -lt $morning_time ]; then
