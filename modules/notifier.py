@@ -22,8 +22,8 @@ class EmailNotifier:
         if self.enabled:
             try:
                 self.yag = yagmail.SMTP(
-                    user=self.config['sender_email'],
-                    password=self.config['sender_password']
+                    user=self.config['sender'],
+                    password=self.config['password']
                 )
                 logger.debug("✅ Yagmail initialisé")
             except Exception as e:
