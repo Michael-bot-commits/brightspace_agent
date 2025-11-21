@@ -9,12 +9,11 @@ import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 from cryptography.fernet import Fernet
-from environs import Env
+from dotenv import load_dotenv
 
 from utils.logger import logger
 
-env = Env()
-env.read_env()
+load_dotenv()
 
 
 class AuthManager:
@@ -37,7 +36,7 @@ class AuthManager:
         self.cookies_file = cookies_file
         
         # Clé de chiffrement
-        self.encryption_key = env.str('ENCRYPTION_KEY').encode()
+        self.encryption_key = os.getenv('ENCRYPTION_KEY').encode()
         self.cipher = Fernet(self.encryption_key)
         
         logger.debug(f"AuthManager initialisé pour {username}")
