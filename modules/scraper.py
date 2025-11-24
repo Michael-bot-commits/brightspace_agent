@@ -81,12 +81,21 @@ class BrightspaceScraper:
                     if popup.count() > 0:
                         logger.info("Fermeture du popup...")
                         popup.click()
-                        time.sleep(1)
+                        time.sleep(2)
                 except:
                     pass
-                
+
                 # Trouver tous les cours
                 logger.info("📚 Recherche des cours...")
+
+                # Attendre que les cours se chargent (important pour Railway avec CPU limité)
+                try:
+                    logger.info("⏳ Attente du chargement des cours...")
+                    page.wait_for_selector('.d2l-card-container', timeout=15000)
+                    time.sleep(2)  # Délai supplémentaire pour s'assurer que tout est chargé
+                except:
+                    logger.warning("⚠️ Timeout en attente des cours, tentative de récupération...")
+
                 course_cards = page.locator('.d2l-card-container').all()
                 
                 logger.info(f"📚 {len(course_cards)} cours trouvés")
